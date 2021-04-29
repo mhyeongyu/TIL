@@ -97,3 +97,62 @@ for page in range(1,8):
         product = li.find_element_by_css_selector('h5.proTit').text
         price = li.find_element_by_css_selector('.proPrice').text.split('원')[0]
         print(product, price)
+
+
+#####Day_3#####
+import time
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from bs4 import BeautifulSoup
+
+url='https://www.youtube.com/channel/UCyn-K7rZLXjGl7VXGweIlcA/videos'
+SCROLL_PAUSE_TIME=0.5
+now_height = 0
+
+driver = webdriver.Chrome('chromedriver.exe')
+driver.get(url)
+
+body = driver.find_element_by_tag_name('body')
+while True:
+    #javascript function
+    last_height = driver.execute_script('return document.documentElement.scrollHeight')
+    #스크롤
+    body.send_keys(Keys.END)
+    time.sleep(3)
+    if now_height == last_height: break
+    else: now_height = last_height
+
+page = driver.page_source
+soup = BeautifulSoup(page, 'html.parser')
+all_videos = soup.find_all(id='dismissible')
+
+
+#title_lst생성
+title_lst = []
+for video in all_videos:
+    title = video.find(id='video-title')
+    title_lst.append(title.text)
+
+#video_lst생성
+video_time_lst = []
+for video in all_videos:
+    video_time = video.find('span', {'class':'style-scope ytd-thumbnail-overlay-time-status-renderer'})
+    split_time = video_time.text.strip().split(':')
+    total_time = int(split_time[0]) * 60 + int(split_time[1])
+    video_time_lst.append(total_time)
+
+#view_lst생성
+view_num_lst = []
+for video in all_videos:
+    view_num = video.find('span', {'class':'style-scope ytd-grid-video-renderer'})
+    split_view = view_num.text.split(' ')
+    split = split_view[1]
+    if split[-2:] == '만회': view = float(split[:-2]) * 10000
+    else: view = float(split[:-2]) * 1000
+    view_num_lst.append(int(view))
+
+#youtube_df생성
+youtube_dict = {'title':title_lst, 
+               'video_time':video_time_lst, 
+               'view_num':view_num_lst}
+youtube_df = pd.DataFrame(youtube_dict)
