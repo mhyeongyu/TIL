@@ -1,0 +1,32 @@
+MachineLearning
+	지도학습
+		분류
+			DecisionTree
+			SVM
+			LogisticRegression
+			KNN
+		회귀
+			LinearRegression
+			Ridge
+			Lasso
+			ElasticNet	
+	비지도학습
+		차원축소
+			PCA	
+		군집
+			K-means
+	강화학습
+
+Ensemble
+	Bagging
+	Voting
+	Boosting
+	
+	RandomForest
+	
+
+DeepLearning
+	DNN
+	CNN
+	RNN
+	
