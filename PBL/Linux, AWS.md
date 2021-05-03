@@ -1,3 +1,4 @@
+```
 sudo service Process_name start #Process 시작
 sudo service Process_name stop #Process 중지
 sudo service Process_name restart #Process 재시작
@@ -8,9 +9,10 @@ apt-get update #패키지 목록 업데이트
 apt-get install Package #패키지 설치 (apt-get update 후 실행)
 apt-get upgrade Package #패키지 업그레이드
 apt-get remove Package #패키지 삭제
+```
 
-
-ex) apache2
+```
+#ex) apache2
 sudo apt-get update #패키지 목록 업데이트
 sudo apt-get install apache2 #아파치 설치
 sudo service apache2 start #아파치 실행
@@ -21,9 +23,10 @@ sudo service apache2 stop #아파치 종료
 su - root계정 실행, 관리자권한으로 변경
 Package --version #패키지 버전 확인
 hostname -l #호스트 확인
+```
 
 
-#Linux
+## Linux
 ls #디렉토리 목록 확인
 mkdir #새 디렉토리 생성
 cd #디렉토리 이동
@@ -37,8 +40,8 @@ clear #명령창 내용 삭제
 touch #파일 생성
 
 
-#AWS
-EC2
+## AWS
+#### EC2
 -인스턴스
 퍼블릭 IPv4 주소
 퍼블릭 IPv4 DNS
@@ -55,11 +58,11 @@ Mysql : 3306
 포트구성
 
 
-RDS
+#### RDS
 -데이터베이스
 엔드포인트로 연결
 
-S3
+#### S3
 simple storage service
 -버킷 생성
 웹서버 파일로드
