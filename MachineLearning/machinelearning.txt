@@ -2,9 +2,9 @@ MachineLearning
 	지도학습
 		분류
 			DecisionTree
-			SVM
 			LogisticRegression
 			KNN
+			SVM
 		회귀
 			LinearRegression
 			Ridge
