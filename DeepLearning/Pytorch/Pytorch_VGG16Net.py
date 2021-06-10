@@ -1,9 +1,3 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 import numpy as np
 import warnings
 warnings.filterwarnings('ignore')
@@ -19,18 +13,11 @@ from torchvision import transforms
 import torchvision.models as models
 
 
-# In[2]:
-
-
 transform = transforms.Compose([
     transforms.ToTensor()
 #     transforms.Normalize([0.5, 0.5, 0.5], [0.5, 0.5, 0.5]),
 #     transforms.Resize((224, 224))
 ])
-
-
-# In[3]:
-
 
 train_dataset = datasets.CIFAR10(root='./CIFAR10',
                               train=True,
@@ -42,10 +29,6 @@ test_dataset = datasets.CIFAR10(root='./CIFAR10',
                              download=True,
                              transform=transform)
 
-
-# In[4]:
-
-
 train_loader = torch.utils.data.DataLoader(train_dataset,
                                            batch_size=512,
                                            shuffle=True)
@@ -54,15 +37,7 @@ test_loader = torch.utils.data.DataLoader(test_dataset,
                                           batch_size=512,
                                           shuffle=False)
 
-
-# In[5]:
-
-
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-
-
-# In[6]:
-
 
 # for X_train, y_train in train_loader:
 #     break
@@ -74,10 +49,6 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     
 # print(X_train.shape)
 
-
-# In[7]:
-
-
 classes = ('plane', 'car', 'bird', 'cat',
            'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
@@ -85,7 +56,7 @@ model = models.vgg16().to(device)
 criterion = nn.CrossEntropyLoss().cuda()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-epochs = 1
+epochs = 10
 
 for epoch in tqdm(range(epochs)):
     running_loss = 0.0
@@ -106,26 +77,14 @@ for epoch in tqdm(range(epochs)):
             running_loss = 0.0
 print('Finish')
 
-
-# In[ ]:
-
-
 dataiter = iter(test_loader)
 images, labels = dataiter.next()
 outputs = model(images)
-
-
-# In[ ]:
-
 
 _, predicted = torch.max(outputs, 1)
 
 print('Predicted: ', ' '.join('%5s' % classes[predicted[j]]
                               for j in range(4)))
-
-
-# In[ ]:
-
 
 correct = 0
 total = 0
@@ -139,10 +98,6 @@ with torch.no_grad():
 
 print('Accuracy of the network on the 10000 test images: %d %%' % (
     100 * correct / total))
-
-
-# In[ ]:
-
 
 class_correct = list(0. for i in range(10))
 class_total = list(0. for i in range(10))
