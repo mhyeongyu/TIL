@@ -3,7 +3,7 @@
 
 **MachineLearning**  
 **DeepLearning**  
-**Tensorflow,Pytorch**  
+**Tensorflow Pytorch**  
 
 **Python**  
 **Java**  
