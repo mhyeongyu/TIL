@@ -16,6 +16,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from xgboost import XGBClassifier
 
+# 주가데이터 로드, (name='종목명', stock_code=종목코드와 종목명이 들어있는 데이터프레임)
 def load_stocks_data(name, stock_code):
     
     codes_dic = dict(stock_code.values)
@@ -28,9 +29,8 @@ def load_stocks_data(name, stock_code):
     finish_date = str(today)
     
     try:
-        time.sleep(2)
         finance_data = pdr.DataReader(f'{code}.KS','yahoo', start_date, finish_date)
-        time.sleep(2)
+        time.sleep(1)
     except:
         print(f'     LOAD ERROR: {name}     ')
     
@@ -41,6 +41,7 @@ def load_stocks_data(name, stock_code):
     else:
         return None
 
+# 주가데이터 객체 생성
 class Stocks:
 
     columns = ['MACD', 'MACD_Signal', 'MACD_Oscillator', 'RSI', 'RSI_Signal', 
@@ -52,12 +53,14 @@ class Stocks:
 
     target_dic = {5: 'ma5', 20:'ma20', 60:'ma60', 120:'ma120'}
 
+    # data='주가데이터', code='종목코드', day='예측기간 ex)5, 20, 60, 120'
     def __init__(self, data, code, day):
         self.data = data
         self.target = self.target_dic[day]
         self.day = day
         self.code = code
 
+    # 모델링에 활용할 보조지표 생성 및 전처리
     def preprocessing(self, columns=columns, sign_columns=sign_columns):
         #MA
         self.data['ma5'] = self.data['Close'].rolling(window=5).mean()
@@ -219,6 +222,7 @@ class Stocks:
 
         return self.data
 
+    # 모델링, financedata='모델링 시행할 처리 완료된 데이터'
     def modeling(self, financedata):
         data = financedata.iloc[:-self.day, :]
         X = data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Adj Close', 'up', 'down',
@@ -238,6 +242,7 @@ class Stocks:
 
         model.fit(X_train, y_train, early_stopping_rounds=20, eval_metric='logloss', eval_set=evals, verbose=50)
 
+        # 지정경로에 생성한 모델과 스케일러 저장
         model_file_name = f'./model/xgb_model_{self.code}_{str(self.day)}.pkl' 
         scaler_file_name = f'./model/scaler_{self.code}_{str(self.day)}.pkl'
 
@@ -246,7 +251,8 @@ class Stocks:
 
         return print(f'{self.code}_{self.day}_Modeling Finish!!')
 
-
+    # 예측값 반환, path='모델, 스케일러 경로'
+    # 예측값 딕셔너리 형태로 반환
     def predict(self, path='./model'):
         model = joblib.load(f'{path}/xgb_model_{self.code}_{str(self.day)}.pkl')
         scaler = joblib.load(f'{path}/scaler_{self.code}_{str(self.day)}.pkl')
