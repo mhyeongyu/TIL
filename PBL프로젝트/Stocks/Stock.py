@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler
 from xgboost import XGBClassifier
 
-def load_finance_data(name, stock_code):
+def load_stocks_data(name, stock_code):
     
     codes_dic = dict(stock_code.values)
     code = codes_dic[name]
@@ -41,7 +41,7 @@ def load_finance_data(name, stock_code):
     else:
         return None
 
-class MakeFeature:
+class Stocks:
 
     columns = ['MACD', 'MACD_Signal', 'MACD_Oscillator', 'RSI', 'RSI_Signal', 
                'kdj_k', 'kdj_d', 'kdj_j', 'CCI', 'PDI', 'MDI', 'ADX', 'OBV', 'OBV_EMA']
@@ -58,7 +58,7 @@ class MakeFeature:
         self.day = day
         self.code = code
 
-    def financefeature(self, columns=columns, sign_columns=sign_columns):
+    def preprocessing(self, columns=columns, sign_columns=sign_columns):
         #MA
         self.data['ma5'] = self.data['Close'].rolling(window=5).mean()
         self.data['ma60'] = self.data['Close'].rolling(window=60).mean()
@@ -247,7 +247,7 @@ class MakeFeature:
         return print(f'{self.code}_{self.day}_Modeling Finish!!')
 
 
-    def predictvalue(self, path='./model'):
+    def predict(self, path='./model'):
         model = joblib.load(f'{path}/xgb_model_{self.code}_{str(self.day)}.pkl')
         scaler = joblib.load(f'{path}/scaler_{self.code}_{str(self.day)}.pkl')
 
@@ -255,14 +255,18 @@ class MakeFeature:
                             'ma5', 'ma20', 'ma60', 'ma120', 'target'], axis=1)
 
         test_data = self.data.iloc[-self.day:, :]
-        test = scaler.transform(test_data)
         
-        week = timedelta(weeks=self.day//5)
+        test = scaler.transform(test_data)
+        stock_data = test_data.reset_index()
+        
+        week = self.day//5
+
+        first_day = stock_data.iloc[-1, 0] + timedelta(days=1)
+        finish_day = stock_data.iloc[-1, 0] + timedelta(days=week*7)
         # print(week)
         
-        test_data = test_data.reset_index()
-        test_data['Date'] = test_data['Date'].apply(lambda x: (x + week).strftime('%Y-%m-%d'))
-        pred_day = np.array(test_data['Date'])
+        day_range = pd.date_range(first_day, finish_day)
+        pred_day = np.array(day_range[day_range.dayofweek < 5].strftime('%Y-%m-%d'))
         
         pred = model.predict(test)
 
@@ -282,4 +286,5 @@ class MakeFeature:
                 alpha = 0
                 alpha_lst.append(alpha)
 
-        return result_dic, alpha_lst
+        return result_dic
+        # return result_dic, alpha_lst
