@@ -229,8 +229,10 @@ class Stocks:
                         'ma5', 'ma20', 'ma60', 'ma120', 'target'], axis=1)
         y = data[['target']]
         
+        # 최대한 최근의 데이터를 학습하기 위해 뒷부분의 0.05%만 test 데이터로 활용
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.05, shuffle=False)
         
+        # 스케일링 적용하여 모든 변수 수치 정규화
         scaler = MinMaxScaler()
         scaler.fit(X_train)
 
@@ -260,6 +262,7 @@ class Stocks:
         self.data = self.data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Adj Close', 'up', 'down',
                             'ma5', 'ma20', 'ma60', 'ma120', 'target'], axis=1)
 
+        # test데이터의 뒷부분을 예측데이터로 활용
         test_data = self.data.iloc[-self.day:, :]
         
         test = scaler.transform(test_data)
@@ -282,15 +285,15 @@ class Stocks:
             result_dic[i] = j
         
         # 시각화를 위한 강도 생성
-        alpha_lst = []
-        alpha = 0
-        for i in range(len(pred)):
-            if pred[i] == 1:
-                alpha += 1
-                alpha_lst.append(alpha)
-            else:
-                alpha = 0
-                alpha_lst.append(alpha)
+        # alpha_lst = []
+        # alpha = 0
+        # for i in range(len(pred)):
+        #     if pred[i] == 1:
+        #         alpha += 1
+        #         alpha_lst.append(alpha)
+        #     else:
+        #         alpha = 0
+        #         alpha_lst.append(alpha)
 
         return result_dic
         # return result_dic, alpha_lst
