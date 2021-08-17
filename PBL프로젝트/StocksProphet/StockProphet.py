@@ -150,7 +150,7 @@ class Stocks:
         future_data = prophet.make_future_dataframe(periods=day, freq='min')
         forecast_data = prophet.predict(future_data)
 
-        pred = forecast_data.yhat.values[-20:]
+        pred = forecast_data.yhat.values[-day:]
 
         week = day//5
 

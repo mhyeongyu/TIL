@@ -1,5 +1,5 @@
 import pandas as pd
-import Stock as st
+import StockProphet as st
 import joblib
 from flask import Flask, request
 from datetime import timedelta
@@ -8,11 +8,9 @@ def hola_sec_function(name='삼성전자', day=5):
 
     # 종목명, 종목코드 불러오기
     stock_code = pd.read_csv('./KOSPI_200.csv', dtype={'종목코드': str, '종목명': str})[['종목명', '종목코드']]
-
     data, code = st.load_stocks_data(f'{name}', stock_code) # 종목명, 종목코드로 주가데이터 로드
-    stocks = st.Stocks(data, code, int(day))                # stocks 객체 생성
-    stocks.preprocessing()                                  # stocks 객체안의 데이터 보조지표 생성 및 전처리
-    result = stocks.predict()                               # 예측값 딕셔너리 형태로 반환
+    stocks = st.Stocks(data)                                # stocks 객체 생성
+    result = stocks.predict(code, day)                      # 예측값 딕셔너리 형태로 반환
 
     return result
 
