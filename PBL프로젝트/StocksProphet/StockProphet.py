@@ -7,10 +7,10 @@ import itertools
 import random
 import pickle
 from datetime import timedelta
+import FinanceDataReader as fdr
 
 import numpy as np
 import pandas as pd
-import pandas_datareader as pdr
 pd.set_option('display.float_format', '{:.4f}'.format)
 pd.set_option('display.max_columns', None)
 import statsmodels.api as sm
@@ -32,17 +32,16 @@ def load_stocks_data(name, stock_code):
     code = codes_dic[name]
 
     today = datetime.date.today()
-    diff_day = datetime.timedelta(days=10000)
+    diff_day = datetime.timedelta(days=365)
     
-    start_date = '2020-02-01'
+    start_date = str(today - diff_day)
     finish_date = str(today)
     
     try:
-        data = pdr.DataReader(f'{code}.KS','yahoo', start_date, finish_date)
+        data = fdr.DataReader(f'{code}', start_date, finish_date)
         time.sleep(1)
         print(data.shape)
         
-        data = data[data['Volume'] != 0]
         data = data.reset_index()
         data = data[['Date', 'Close']]
         data.columns = ['ds', 'y']
@@ -57,11 +56,11 @@ def mean_absolute_percentage_error(y_true, y_pred):
 
 class Stocks:
 
-    params_grid = {'changepoint_prior_scale':[0.1,0.01,0.001],
-                'n_changepoints' : [50,100,150],
-                'fourier_order' : [5,10],
-                'period':[0.1,0.3,0.5]
-                }
+    params_grid = {'changepoint_prior_scale': [0.01, 0.05, 0.1, 0.5],
+                   'seasonality_prior_scale': [1, 5, 10, 15],
+                   'yearly_seasonality': [5, 10, 15, 20]
+                   }
+
     grid = ParameterGrid(params_grid)
     cnt = 0
 
@@ -70,9 +69,9 @@ class Stocks:
 
     model_parameters = pd.DataFrame(columns = ['MAPE',
                                                'changepoint_prior_scale',
-                                               'n_changepoints',
-                                               'fourier_order',
-                                               'period'])
+                                               'seasonality_prior_scale',
+                                               'yearly_seasonality']
+                                               )
 
     def __init__(self, data):
         self.data = data
@@ -85,18 +84,17 @@ class Stocks:
         
         idx = 0
             
-        for p in grid:
-            prophet = Prophet(seasonality_mode='multiplicative', 
-                            yearly_seasonality=False,
-                            weekly_seasonality=False,
-                            daily_seasonality=False,
-                            changepoint_prior_scale=p['changepoint_prior_scale'],
-                            n_changepoints=p['n_changepoints'],
-                            )
-            prophet.add_seasonality(name='seasonality_1',period=p['period'],fourier_order=p['fourier_order'])
+        for p in tqdm(grid):
+            prophet = Prophet(yearly_seasonality=p['yearly_seasonality'],
+                              weekly_seasonality=False,
+                              daily_seasonality=False,
+                              changepoint_prior_scale=p['changepoint_prior_scale'],
+                              seasonality_prior_scale=p['seasonality_prior_scale']
+                              )
+
             prophet.fit(train_data)
 
-            future_data = prophet.make_future_dataframe(periods=day, freq='min')
+            future_data = prophet.make_future_dataframe(periods=day, freq='D')
             forecast_data = prophet.predict(future_data)
 
             pred_y = forecast_data.yhat.values[-day:]
@@ -106,36 +104,28 @@ class Stocks:
                 idx += 1
                 model_parameters = model_parameters.append({'MAPE':MAPE,
                                                             'changepoint_prior_scale':p['changepoint_prior_scale'],
-                                                            'n_changepoints':p['n_changepoints'],
-                                                            'fourier_order':p['fourier_order'],
-                                                            'period':p['period']
+                                                            'seasonality_prior_scale':p['seasonality_prior_scale'],
+                                                            'yearly_seasonality':p['yearly_seasonality']
                                                             },ignore_index=True)
 
                 
             else:
                 if MAPE < model_parameters['MAPE'].iloc[-1]:
                     model_parameters = model_parameters.append({'MAPE':MAPE,
-                                                    'changepoint_prior_scale':p['changepoint_prior_scale'],
-                                                    'n_changepoints':p['n_changepoints'],
-                                                    'fourier_order':p['fourier_order'],
-                                                    'period':p['period']
-                                                    },ignore_index=True)
+                                                                'changepoint_prior_scale':p['changepoint_prior_scale'],
+                                                                'seasonality_prior_scale':p['seasonality_prior_scale'],
+                                                                'yearly_seasonality':p['yearly_seasonality']
+                                                                },ignore_index=True)
                 else:
                     continue
 
         parameter = model_parameters.iloc[-1, :]
 
-        prophet = Prophet(seasonality_mode='multiplicative', 
-                            yearly_seasonality=False,
-                            weekly_seasonality=False,
-                            daily_seasonality=False,
-                            changepoint_prior_scale=parameter['changepoint_prior_scale'],
-                            n_changepoints=int(parameter['n_changepoints']),
-                            )
-
-        prophet.add_seasonality(name='seasonality_1', period=0.1, fourier_order=int(parameter['fourier_order']))
-        prophet.add_seasonality(name='seasonality_2', period=0.3, fourier_order=int(parameter['fourier_order']))
-        prophet.add_seasonality(name='seasonality_3', period=0.5, fourier_order=int(parameter['fourier_order']))
+        prophet = Prophet(yearly_seasonality=parameter['yearly_seasonality'],
+                        weekly_seasonality=False,
+                        daily_seasonality=False,
+                        changepoint_prior_scale=parameter['changepoint_prior_scale'],
+                        seasonality_prior_scale=parameter['seasonality_prior_scale'])
 
         prophet.fit(self.data)
 
@@ -147,7 +137,7 @@ class Stocks:
         with open(f'./model/prophet_{code}_{day}.pkl', 'rb') as f:
             prophet = pickle.load(f)
 
-        future_data = prophet.make_future_dataframe(periods=day, freq='min')
+        future_data = prophet.make_future_dataframe(periods=day, freq='D')
         forecast_data = prophet.predict(future_data)
 
         pred = forecast_data.yhat.values[-day:]
@@ -166,3 +156,4 @@ class Stocks:
             result_dic[i] = j
 
         return result_dic
+        # return pred_day, pred
