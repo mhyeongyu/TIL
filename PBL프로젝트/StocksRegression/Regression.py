@@ -11,6 +11,12 @@ import numpy as np
 import pandas as pd
 pd.set_option('display.float_format', '{:.4f}'.format)
 pd.set_option('display.max_columns', None)
+<<<<<<< Updated upstream:PBL프로젝트/StocksRegression/Regression.py
+=======
+import matplotlib.pyplot as plt
+import seaborn as sns
+plt.style.use('ggplot')
+>>>>>>> Stashed changes:PBL프로젝트/StocksProphet/StockProphet.py
 
 from sklearn.model_selection import ParameterGrid
 
