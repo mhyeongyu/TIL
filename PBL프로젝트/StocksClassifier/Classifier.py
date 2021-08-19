@@ -213,6 +213,7 @@ class Stocks:
         for c in sign_columns:
             data[f'{c}'] = data[f'{c}'].astype('int')
 
+        print('Done!!')
         return data
 
     # 모델링, financedata='모델링 시행할 처리 완료된 데이터'
@@ -252,7 +253,7 @@ class Stocks:
         model = joblib.load(f'./model/xgb_model_{code}_{str(day)}.pkl')
         scaler = joblib.load(f'./model/scaler_{code}_{str(day)}.pkl')
 
-        data = data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Adj Close', 'up', 'down',
+        data = data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Change', 'up', 'down',
                           'ma5', 'ma20', 'ma60', 'ma120', 'target'], axis=1)
 
         # test데이터의 뒷부분을 예측데이터로 활용
