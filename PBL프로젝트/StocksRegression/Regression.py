@@ -12,6 +12,10 @@ import pandas as pd
 pd.set_option('display.float_format', '{:.4f}'.format)
 pd.set_option('display.max_columns', None)
 
+import statsmodels.api as sm
+from pmdarima.arima import auto_arima
+from statsmodels.tsa.arima_model import ARIMA, ARIMAResults
+
 from sklearn.model_selection import ParameterGrid
 
 from fbprophet import Prophet
@@ -70,6 +74,20 @@ class Stocks:
     
     def modeling(self, code, day, grid=grid, model_parameters=model_parameters):
         
+        #ARIMA
+        model_arima = auto_arima(self.data['y'].values, trace=False, 
+                             error_action='ignore', 
+                             start_p=0, start_q=0, max_p=2, max_q=2, 
+                             suppress_warnings=True, stepwise=False, seasonal=False)
+        model_fit = model_arima.fit(self.data['y'].values)
+        ORDER = model_fit.order
+        
+        model = ARIMA(self.data['y'].values, order = ORDER)
+        model_fit = model.fit(trend = 'c', full_output = True, disp = 1)
+
+        model_fit.save('./model/arima_{code}_{day}.pkl')
+
+        #Prophet
         train_data = self.data.iloc[:-day, :]
         test_data = self.data.iloc[-day:, :]
         test_data = test_data.set_index('ds')
@@ -127,6 +145,21 @@ class Stocks:
         return print(f'{code}_{day}_Modeling Finish!!')
 
     def predict(self, code, day):
+        
+        arima = ARIMAResults.load(f'./model/arima_{code}_{day}.pkl')
+        forecast = arima.forecast(day)
+    
+        #하락추세
+        if forecast[0][0] > forecast[0][-1]:
+            value = (forecast[0] + forecast[2].reshape(-1)[1::2]) / 2
+        
+        #상승추세
+        elif forecast[0][0] < forecast[0][-1]:
+            value = (forecast[0] + forecast[2].reshape(-1)[::2]) / 2
+        
+        #변동없음
+        else:
+            value = forecast[0]
 
         with open(f'./model/prophet_{code}_{day}.pkl', 'rb') as f:
             prophet = pickle.load(f)
@@ -136,17 +169,18 @@ class Stocks:
 
         pred = forecast_data.yhat.values[-day:]
 
+        mean_pred = (value + pred) / 2
         week = day//5
 
-        first_day = forecast_data.iloc[-day*2, 0] + timedelta(weeks=week)
-        finish_day = forecast_data.iloc[-day-1, 0] + timedelta(weeks=week)
+        first_day = future_data.iloc[-day+1, 0]
+        finish_day = future_data.iloc[-day, 0] + timedelta(weeks=week)
         
         day_range = pd.date_range(first_day, finish_day)
         pred_day = np.array(day_range[day_range.dayofweek < 5].strftime('%Y-%m-%d'))
 
         # dictonary생성, (key:날짜 value:예측값)
         result_dic = {}
-        for i, j in zip(pred_day, pred):
+        for i, j in zip(pred_day, mean_pred):
             result_dic[i] = j
 
         return result_dic
