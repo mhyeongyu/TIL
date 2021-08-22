@@ -13,5 +13,6 @@ for name in names_lst:
     for day in days_lst:
         stocks = cls.Stocks(data)
         stocks.preprocessing()
-        sign_data = stocks.FinanceSign(stocks.data, day)
-        stocks.modeling(sign_data, code, day)
+        sign_data = stocks.stocksign(stocks.data, day)
+        para = stocks.modeling(sign_data, code, day)
+        parameter = stocks.modelings(sign_data, code, day)

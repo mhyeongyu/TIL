@@ -1,6 +1,6 @@
 import time
-import datetime
-from datetime import timedelta
+from tqdm import tqdm
+from datetime import timedelta, date
 import warnings
 warnings.filterwarnings('ignore')
 import joblib
@@ -11,8 +11,10 @@ import pandas as pd
 pd.set_option('display.float_format', '{:.2f}'.format)
 pd.set_option('display.max_columns', None)
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, ParameterGrid
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from sklearn.metrics import accuracy_score
+from sklearn.ensemble import RandomForestClassifier
 from xgboost import XGBClassifier
 
 # 주가데이터 로드, (name='종목명', stock_code=종목코드와 종목명이 들어있는 데이터프레임)
@@ -21,8 +23,10 @@ def load_stocks_data(name, stock_code):
     codes_dic = dict(stock_code.values)
     code = codes_dic[name]
 
-    today = datetime.date.today()
+    today = date.today()
+    # today = date.today() - timedelta(days=30)
     diff_day = timedelta(days=10000)
+    print(f'TODAY: {today}')
 
     start_date = str(today - diff_day)
     finish_date = str(today)
@@ -160,11 +164,12 @@ class Stocks:
         self.data['OBV_EMA'] = self.data['OBV'].ewm(span=20, adjust=False).mean()
 
         self.data = self.data.dropna().reset_index()
-        return print('Done!!')
+        return print('Preprocessing Done!!')
 
-    def FinanceSign(self, data, day, columns=columns, sign_columns=sign_columns, target_dic=target_dic):
+    def stocksign(self, data, day, columns=columns, sign_columns=sign_columns, target_dic=target_dic):
         
         target = target_dic[day]
+        # target = 'Close'
 
         for col in columns:
             data[f'{col}'] = data[f'{col}'].ewm(span=day, adjust=False).mean()
@@ -213,17 +218,94 @@ class Stocks:
         for c in sign_columns:
             data[f'{c}'] = data[f'{c}'].astype('int')
 
-        print('Done!!')
+        print('StockSign Done!!')
         return data
 
     # 모델링, financedata='모델링 시행할 처리 완료된 데이터'
-    def modeling(self, data, code, day):
+    def modeling(self, data, code, day, size):
+
         data = data.iloc[:-day, :]
+
         X = data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Change', 'up', 'down',
                         'ma5', 'ma20', 'ma60', 'ma120', 'target'], axis=1)
         y = data[['target']]
         
         # 최대한 최근의 데이터를 학습하기 위해 뒷부분의 0.05%만 test 데이터로 활용
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=size, shuffle=False)
+        X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.3, shuffle=False)
+        
+        # 스케일링 적용하여 모든 변수 수치 정규화
+        scaler = StandardScaler()
+        scaler.fit(X_train)
+
+        X_train = scaler.transform(X_train)
+        X_val = scaler.transform(X_val)
+        X_test = scaler.transform(X_test)
+        
+        params_grid = {'n_estimators' : [1000], 
+                       'eta' : [0.01, 0.1, 0.3], 
+                       'min_child_weight' : np.arange(1, 8, 1), 
+                       'max_depth' : np.arange(3,9,1) , 
+                       'colsample_bytree' :np.arange(0.8, 1.0, 0.1), 
+                       'subsample' :np.arange(0.8, 1.0, 0.1)}
+
+        grid = ParameterGrid(params_grid)
+
+        model_parameters = pd.DataFrame(columns = ['ACC',
+                                                   'n_estimators', 
+                                                   'eta',
+                                                   'min_child_weight',
+                                                   'max_depth',
+                                                   'colsample_bytree',
+                                                   'subsample']
+                                                   )
+
+        idx = 0
+
+        for p in grid:
+            model = XGBClassifier(n_estimators=p['n_estimators'],
+                                  learning_rate=p['eta'],
+                                  min_child_weight=p['min_child_weight'],
+                                  max_depth=p['max_depth'],
+                                  colsample_bytree=p['colsample_bytree'],
+                                  subsample=p['subsample']
+                                  )
+
+            evals = [(X_val, y_val)]
+
+            model.fit(X_train, y_train, early_stopping_rounds=50, eval_metric='logloss', eval_set=evals, verbose=0)
+            pred = model.predict(X_test)
+
+            acc = accuracy_score(pred, y_test)
+            # print(f'Accuracy: {acc}')
+
+            if idx == 0:
+                idx += 1
+                model_parameters = model_parameters.append({'ACC':acc,
+                                                            'n_estimators':p['n_estimators'],
+                                                            'eta':p['eta'],
+                                                            'min_child_weight':p['min_child_weight'],
+                                                            'max_depth':p['max_depth'],
+                                                            'colsample_bytree':p['colsample_bytree'],
+                                                            'subsample':p['subsample']
+                                                            },ignore_index=True)
+                
+            else:
+                if acc > model_parameters['ACC'].iloc[-1]:
+                    model_parameters = model_parameters.append({'ACC':acc,
+                                                                'n_estimators':p['n_estimators'],
+                                                                'eta':p['eta'],
+                                                                'min_child_weight':p['min_child_weight'],
+                                                                'max_depth':p['max_depth'],
+                                                                'colsample_bytree':p['colsample_bytree'],
+                                                                'subsample':p['subsample']
+                                                                },ignore_index=True)
+                else:
+                    continue
+        
+                    
+        parameter = model_parameters.iloc[-1, :]
+
         X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.05, shuffle=False)
         
         # 스케일링 적용하여 모든 변수 수치 정규화
@@ -232,11 +314,18 @@ class Stocks:
 
         X_train = scaler.transform(X_train)
         X_val = scaler.transform(X_val)
-        
-        model = XGBClassifier(learning_rate=0.1, max_depth=3)
+
         evals = [(X_val, y_val)]
 
-        model.fit(X_train, y_train, early_stopping_rounds=20, eval_metric='logloss', eval_set=evals, verbose=50)
+        model = XGBClassifier(n_estimators=int(parameter['n_estimators']),
+                              learning_rate=parameter['eta'],
+                              min_child_weight=int(parameter['min_child_weight']),
+                              max_depth=int(parameter['max_depth']),
+                              colsample_bytree=parameter['colsample_bytree'],
+                              subsample=parameter['subsample']
+                              )
+
+        model.fit(X_train, y_train, early_stopping_rounds=50, eval_metric='logloss', eval_set=evals, verbose=0)
 
         # 지정경로에 생성한 모델과 스케일러 저장
         model_file_name = f'./model/xgb_model_{code}_{str(day)}.pkl' 
@@ -245,7 +334,105 @@ class Stocks:
         joblib.dump(model, model_file_name)
         joblib.dump(scaler, scaler_file_name)
 
-        return print(f'{code}_{day}_Modeling Finish!!')
+        return parameter, print(f'{code}_{day}_Modeling Finish!!')
+
+
+    def modelings(self, data, code, day):
+        
+        data = data.iloc[:-day, :]
+
+        X = data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Change', 'up', 'down',
+                        'ma5', 'ma20', 'ma60', 'ma120', 'target'], axis=1)
+        y = data[['target']]
+        
+        # 최대한 최근의 데이터를 학습하기 위해 뒷부분의 0.05%만 test 데이터로 활용
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.05, shuffle=False)
+        X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.3, shuffle=False)
+        
+        # 스케일링 적용하여 모든 변수 수치 정규화
+        scaler = StandardScaler()
+        scaler.fit(X_train)
+
+        X_train = scaler.transform(X_train)
+        X_val = scaler.transform(X_val)
+        X_test = scaler.transform(X_test)
+
+        #RandomForest
+        params_grid = {'n_estimators': [100, 300, 500],
+                        'max_depth': [5, 15, 25],
+                        'min_samples_split': [2, 5, 10],
+                        'min_samples_leaf': [1, 5, 10]}
+        
+        grid = ParameterGrid(params_grid)
+
+        model_parameters = pd.DataFrame(columns = ['ACC',
+                                                    'n_estimators', 
+                                                    'max_depth',
+                                                    'min_samples_split',
+                                                    'min_samples_leaf']
+                                                    )
+
+        idx = 0
+
+        for p in grid:
+            model = RandomForestClassifier(n_estimators=p['n_estimators'],
+                                            max_depth=p['max_depth'],
+                                            min_samples_split=p['min_samples_split'],
+                                            min_samples_leaf=p['min_samples_leaf']
+                                            )
+
+            model.fit(X_train, y_train)
+            pred = model.predict(X_test)
+
+            acc = accuracy_score(pred, y_test)
+            # print(f'Accuracy: {acc}')
+
+            if idx == 0:
+                idx += 1
+                model_parameters = model_parameters.append({'ACC':acc,
+                                                            'n_estimators':p['n_estimators'],
+                                                            'max_depth':p['max_depth'],
+                                                            'min_samples_split':p['min_samples_split'],
+                                                            'min_samples_leaf':p['min_samples_leaf']
+                                                            },ignore_index=True)
+
+            else:
+                if acc > model_parameters['ACC'].iloc[-1]:
+                    model_parameters = model_parameters.append({'ACC':acc,
+                                                                'n_estimators':p['n_estimators'],
+                                                                'max_depth':p['max_depth'],
+                                                                'min_samples_split':p['min_samples_split'],
+                                                                'min_samples_leaf':p['min_samples_leaf']
+                                                                },ignore_index=True)
+                else:
+                    continue
+
+        parameter = model_parameters.iloc[-1, :]
+    
+        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.05, shuffle=False)
+        
+        # 스케일링 적용하여 모든 변수 수치 정규화
+        scaler = StandardScaler()
+        scaler.fit(X_train)
+
+        X_train = scaler.transform(X_train)
+
+        model = RandomForestClassifier(n_estimators=int(p['n_estimators']),
+                                       max_depth=p['max_depth'],
+                                       min_samples_split=p['min_samples_split'],
+                                       min_samples_leaf=p['min_samples_leaf']
+                                       )
+
+        model.fit(X_train, y_train)
+
+        # 지정경로에 생성한 모델과 스케일러 저장
+        model_file_name = f'./model/rf_model_{code}_{str(day)}.pkl' 
+        scaler_file_name = f'./model/scaler_{code}_{str(day)}.pkl'
+
+        joblib.dump(model, model_file_name)
+        joblib.dump(scaler, scaler_file_name)
+
+        return parameter, print(f'{code}_{day}_Modeling Finish!!')
 
     # 예측값 반환, path='모델, 스케일러 경로'
     # 예측값 딕셔너리 형태로 반환

@@ -10,7 +10,7 @@ def hola_sec_function(name='삼성전자', day=5):
     data, code = cls.load_stocks_data(f'{name}', stock_code) # 종목명, 종목코드로 주가데이터 로드
     stocks = cls.Stocks(data)                # stocks 객체 생성
     stocks.preprocessing()
-    sign_data = stocks.FinanceSign(stocks.data, int(day))                                  # stocks 객체안의 데이터 보조지표 생성 및 전처리
+    sign_data = stocks.stocksign(stocks.data, int(day))                                  # stocks 객체안의 데이터 보조지표 생성 및 전처리
     result = stocks.predict(sign_data, code, int(day))                               # 예측값 딕셔너리 형태로 반환
 
     return result

@@ -1,10 +1,9 @@
 from tqdm import tqdm
-import datetime
 import warnings
 import time
 warnings.filterwarnings('ignore')
 import pickle
-from datetime import timedelta
+from datetime import timedelta, date
 import FinanceDataReader as fdr
 
 import numpy as np
@@ -27,9 +26,11 @@ def load_stocks_data(name, stock_code):
     codes_dic = dict(stock_code.values)
     code = codes_dic[name]
 
-    today = datetime.date.today()
+    # today = date.today()
+    today = date.today() - timedelta(days=30)
     diff_day = timedelta(days=365)
-    
+    print(f'TODAY: {today}')
+
     start_date = str(today - diff_day)
     finish_date = str(today)
     
@@ -54,7 +55,9 @@ class Stocks:
 
     params_grid = {'changepoint_prior_scale': [0.01, 0.05, 0.1, 0.5],
                    'seasonality_prior_scale': [1, 5, 10, 15],
-                   'yearly_seasonality': [5, 10, 15, 20]
+                   'yearly_seasonality': [5, 10, 15, 20],
+                   'weekly_seasonality': [1, 3],
+                   'daily_seasonality': [1, 3]
                    }
 
     grid = ParameterGrid(params_grid)
@@ -66,8 +69,9 @@ class Stocks:
     model_parameters = pd.DataFrame(columns = ['MAPE',
                                                'changepoint_prior_scale',
                                                'seasonality_prior_scale',
-                                               'yearly_seasonality']
-                                               )
+                                               'yearly_seasonality',
+                                               'weekly_seasonality',
+                                               'daily_seasonality'])
 
     def __init__(self, data):
         self.data = data
@@ -80,12 +84,16 @@ class Stocks:
                              start_p=0, start_q=0, max_p=2, max_q=2, 
                              suppress_warnings=True, stepwise=False, seasonal=False)
         model_fit = model_arima.fit(self.data['y'].values)
-        ORDER = model_fit.order
         
-        model = ARIMA(self.data['y'].values, order = ORDER)
+        ORDER = model_fit.order
+
+        X = self.data['y'].values
+        X = X.astype('float32')
+
+        model = ARIMA(X, order = ORDER)
         model_fit = model.fit(trend = 'c', full_output = True, disp = 1)
 
-        model_fit.save('./model/arima_{code}_{day}.pkl')
+        model_fit.save(f'./model/arima_{code}_{day}.pkl')
 
         #Prophet
         train_data = self.data.iloc[:-day, :]
@@ -96,8 +104,8 @@ class Stocks:
             
         for p in tqdm(grid):
             prophet = Prophet(yearly_seasonality=p['yearly_seasonality'],
-                              weekly_seasonality=False,
-                              daily_seasonality=False,
+                              weekly_seasonality=p['weekly_seasonality'],
+                              daily_seasonality=p['daily_seasonality'],
                               changepoint_prior_scale=p['changepoint_prior_scale'],
                               seasonality_prior_scale=p['seasonality_prior_scale']
                               )
@@ -115,7 +123,9 @@ class Stocks:
                 model_parameters = model_parameters.append({'MAPE':MAPE,
                                                             'changepoint_prior_scale':p['changepoint_prior_scale'],
                                                             'seasonality_prior_scale':p['seasonality_prior_scale'],
-                                                            'yearly_seasonality':p['yearly_seasonality']
+                                                            'yearly_seasonality':p['yearly_seasonality'],
+                                                            'weekly_seasonality':p['weekly_seasonality'],
+                                                            'daily_seasonality':p['daily_seasonality']
                                                             },ignore_index=True)
 
                 
@@ -124,7 +134,9 @@ class Stocks:
                     model_parameters = model_parameters.append({'MAPE':MAPE,
                                                                 'changepoint_prior_scale':p['changepoint_prior_scale'],
                                                                 'seasonality_prior_scale':p['seasonality_prior_scale'],
-                                                                'yearly_seasonality':p['yearly_seasonality']
+                                                                'yearly_seasonality':p['yearly_seasonality'],
+                                                                'weekly_seasonality':p['weekly_seasonality'],
+                                                                'daily_seasonality':p['daily_seasonality']
                                                                 },ignore_index=True)
                 else:
                     continue
@@ -132,10 +144,10 @@ class Stocks:
         parameter = model_parameters.iloc[-1, :]
 
         prophet = Prophet(yearly_seasonality=parameter['yearly_seasonality'],
-                        weekly_seasonality=False,
-                        daily_seasonality=False,
-                        changepoint_prior_scale=parameter['changepoint_prior_scale'],
-                        seasonality_prior_scale=parameter['seasonality_prior_scale'])
+                          weekly_seasonality=parameter['weekly_seasonality'],
+                          daily_seasonality=parameter['daily_seasonality'],
+                          changepoint_prior_scale=parameter['changepoint_prior_scale'],
+                          seasonality_prior_scale=parameter['seasonality_prior_scale'])
 
         prophet.fit(self.data)
 
@@ -144,18 +156,19 @@ class Stocks:
         
         return print(f'{code}_{day}_Modeling Finish!!')
 
-    def predict(self, code, day):
+    def predict(self, code, day, alpha):
         
         arima = ARIMAResults.load(f'./model/arima_{code}_{day}.pkl')
+
         forecast = arima.forecast(day)
-    
+
         #하락추세
         if forecast[0][0] > forecast[0][-1]:
-            value = (forecast[0] + forecast[2].reshape(-1)[1::2]) / 2
+            value = (forecast[0] + forecast[2].reshape(-1)[::2]) / 2
         
         #상승추세
         elif forecast[0][0] < forecast[0][-1]:
-            value = (forecast[0] + forecast[2].reshape(-1)[::2]) / 2
+            value = (forecast[0] + forecast[2].reshape(-1)[1::2]) / 2
         
         #변동없음
         else:
@@ -169,7 +182,9 @@ class Stocks:
 
         pred = forecast_data.yhat.values[-day:]
 
-        mean_pred = (value + pred) / 2
+        #alpha가 높을수록 Prophet의 비중이 높아짐
+        mean_pred = (value * (1-alpha)) + (pred * alpha)
+        # mean_pred = (value + pred) / 2
         week = day//5
 
         first_day = future_data.iloc[-day+1, 0]
@@ -183,5 +198,6 @@ class Stocks:
         for i, j in zip(pred_day, mean_pred):
             result_dic[i] = j
 
-        return result_dic
-        # return pred_day, pred
+        # return result_dic
+        return pred_day, mean_pred
+        # return mean_pred
