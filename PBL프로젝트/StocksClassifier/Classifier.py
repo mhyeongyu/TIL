@@ -23,7 +23,8 @@ def load_stocks_data(name, stock_code):
     codes_dic = dict(stock_code.values)
     code = codes_dic[name]
 
-    today = date.today()
+    # today = date.today()
+    today = date(2021, 7, 8)
     # today = date.today() - timedelta(days=30)
     diff_day = timedelta(days=10000)
     print(f'TODAY: {today}')
@@ -222,7 +223,7 @@ class Stocks:
         return data
 
     # 모델링, financedata='모델링 시행할 처리 완료된 데이터'
-    def modeling(self, data, code, day, size):
+    def modeling(self, data, code, day):
 
         data = data.iloc[:-day, :]
 
@@ -231,7 +232,7 @@ class Stocks:
         y = data[['target']]
         
         # 최대한 최근의 데이터를 학습하기 위해 뒷부분의 0.05%만 test 데이터로 활용
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=size, shuffle=False)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.05, shuffle=False)
         X_train, X_val, y_train, y_val = train_test_split(X_train, y_train, test_size=0.3, shuffle=False)
         
         # 스케일링 적용하여 모든 변수 수치 정규화
@@ -437,7 +438,8 @@ class Stocks:
     # 예측값 반환, path='모델, 스케일러 경로'
     # 예측값 딕셔너리 형태로 반환
     def predict(self, data, code, day):
-        model = joblib.load(f'./model/xgb_model_{code}_{str(day)}.pkl')
+        xgb_model = joblib.load(f'./model/xgb_model_{code}_{str(day)}.pkl')
+        rf_model = joblib.load(f'./model/rf_model_{code}_{str(day)}.pkl')
         scaler = joblib.load(f'./model/scaler_{code}_{str(day)}.pkl')
 
         data = data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Change', 'up', 'down',
@@ -458,7 +460,11 @@ class Stocks:
         day_range = pd.date_range(first_day, finish_day)
         pred_day = np.array(day_range[day_range.dayofweek < 5].strftime('%Y-%m-%d'))
         
-        pred = model.predict(test)
+        xgb_prob = xgb_model.predict_proba(test)
+        rf_prob = rf_model.predict_proba(test)
+
+        prob = (xgb_prob * 0.8) + (rf_prob * 0.2)
+        pred = np.argmax(prob, axis=1)
 
         # dictonary생성, (key:날짜 value:예측값)
         result_dic = {}
@@ -478,3 +484,33 @@ class Stocks:
 
         return result_dic
         # return result_dic, alpha_lst
+
+
+    def predicts(self, data, code, day, alpha):
+        xgb_model = joblib.load(f'./model/xgb_model_{code}_{str(day)}.pkl')
+        rf_model = joblib.load(f'./model/rf_model_{code}_{str(day)}.pkl')
+        scaler = joblib.load(f'./model/scaler_{code}_{str(day)}.pkl')
+
+        data = data.iloc[:-day, :]
+
+        X = data.drop(['High', 'Low', 'Open', 'Close', 'Volume', 'Change', 'up', 'down',
+                        'ma5', 'ma20', 'ma60', 'ma120', 'target'], axis=1)
+        y = data[['target']]
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.05, shuffle=False)
+        X_test = scaler.transform(X_test)
+        
+        xgb_pred = xgb_model.predict(X_test)
+        rf_pred = rf_model.predict(X_test)
+
+        xgb_prob = xgb_model.predict_proba(X_test)
+        rf_prob = rf_model.predict_proba(X_test)
+
+        prob = (xgb_prob * (1-alpha)) + (rf_prob * alpha)
+        pred = np.argmax(prob, axis=1)
+        
+        xgb_acc = accuracy_score(xgb_pred, y_test)
+        rf_acc = accuracy_score(rf_pred, y_test)
+        acc = accuracy_score(pred, y_test)
+
+        return xgb_acc, rf_acc, acc

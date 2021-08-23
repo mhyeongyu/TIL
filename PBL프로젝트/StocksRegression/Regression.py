@@ -27,7 +27,8 @@ def load_stocks_data(name, stock_code):
     code = codes_dic[name]
 
     # today = date.today()
-    today = date.today() - timedelta(days=30)
+    today = date(2021, 7, 8)
+    # today = date.today() - timedelta(days=30)
     diff_day = timedelta(days=365)
     print(f'TODAY: {today}')
 
@@ -156,7 +157,7 @@ class Stocks:
         
         return print(f'{code}_{day}_Modeling Finish!!')
 
-    def predict(self, code, day, alpha):
+    def predict(self, code, day, alpha=0.5):
         
         arima = ARIMAResults.load(f'./model/arima_{code}_{day}.pkl')
 
