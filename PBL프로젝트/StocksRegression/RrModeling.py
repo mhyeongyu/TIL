@@ -1,13 +1,13 @@
 import pandas as pd
 import Regression as rr
+from tqdm import tqdm
 
-stock_code = pd.read_csv('./KOSPI_200.csv', dtype={'종목코드': str, '종목명': str})[['종목명', '종목코드']]
+stock_code = pd.read_csv('./KOSPI_100.csv', dtype={'종목코드': str, '종목명': str})[['종목명', '종목코드']]
 
-# names_lst = ['삼성전자', 'SK하이닉스', 'LG화학', '카카오', 'NAVER', '현대차']
-days_lst = [5, 20, 60, 120]
 names_lst = list(stock_code['종목명'].values)
+days_lst = [5, 20, 60, 120]
 
-for name in names_lst:
+for name in tqdm(names_lst):
     try:
         print(f'Start {name} Modeling!!')
         data, code = rr.load_stocks_data(f'{name}', stock_code)
@@ -17,3 +17,5 @@ for name in names_lst:
             stocks.modeling(code, day)
     except:
         print(f'{name} ERROR!!')
+
+print('Finish!!!!')

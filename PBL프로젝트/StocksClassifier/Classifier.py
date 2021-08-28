@@ -1,4 +1,3 @@
-import time
 from tqdm import tqdm
 from datetime import timedelta, date
 import warnings
@@ -24,8 +23,8 @@ def load_stocks_data(name, stock_code):
     code = codes_dic[name]
 
     # today = date.today()
-    today = date(2021, 7, 8)
     # today = date.today() - timedelta(days=30)
+    today = date(2021, 7, 8)
     diff_day = timedelta(days=10000)
     print(f'TODAY: {today}')
 
@@ -34,7 +33,6 @@ def load_stocks_data(name, stock_code):
     
     try:
         data = fdr.DataReader(f'{code}', start_date, finish_date)
-        time.sleep(1)
         print(data.shape)
         return data, code
     
@@ -170,7 +168,6 @@ class Stocks:
     def stocksign(self, data, day, columns=columns, sign_columns=sign_columns, target_dic=target_dic):
         
         target = target_dic[day]
-        # target = 'Close'
 
         for col in columns:
             data[f'{col}'] = data[f'{col}'].ewm(span=day, adjust=False).mean()
@@ -223,7 +220,7 @@ class Stocks:
         return data
 
     # 모델링, financedata='모델링 시행할 처리 완료된 데이터'
-    def modeling(self, data, code, day):
+    def xgb_modeling(self, data, code, day):
 
         data = data.iloc[:-day, :]
 
@@ -245,10 +242,9 @@ class Stocks:
         
         params_grid = {'n_estimators' : [1000], 
                        'eta' : [0.01, 0.1, 0.3], 
-                       'min_child_weight' : np.arange(1, 8, 1), 
-                       'max_depth' : np.arange(3,9,1) , 
-                       'colsample_bytree' :np.arange(0.8, 1.0, 0.1), 
-                       'subsample' :np.arange(0.8, 1.0, 0.1)}
+                       'min_child_weight' : [1, 2, 4, 8], 
+                       'max_depth' : [3, 5, 7, 9] 
+                        }
 
         grid = ParameterGrid(params_grid)
 
@@ -256,9 +252,7 @@ class Stocks:
                                                    'n_estimators', 
                                                    'eta',
                                                    'min_child_weight',
-                                                   'max_depth',
-                                                   'colsample_bytree',
-                                                   'subsample']
+                                                   'max_depth']
                                                    )
 
         idx = 0
@@ -267,9 +261,7 @@ class Stocks:
             model = XGBClassifier(n_estimators=p['n_estimators'],
                                   learning_rate=p['eta'],
                                   min_child_weight=p['min_child_weight'],
-                                  max_depth=p['max_depth'],
-                                  colsample_bytree=p['colsample_bytree'],
-                                  subsample=p['subsample']
+                                  max_depth=p['max_depth']
                                   )
 
             evals = [(X_val, y_val)]
@@ -286,9 +278,7 @@ class Stocks:
                                                             'n_estimators':p['n_estimators'],
                                                             'eta':p['eta'],
                                                             'min_child_weight':p['min_child_weight'],
-                                                            'max_depth':p['max_depth'],
-                                                            'colsample_bytree':p['colsample_bytree'],
-                                                            'subsample':p['subsample']
+                                                            'max_depth':p['max_depth']
                                                             },ignore_index=True)
                 
             else:
@@ -297,9 +287,7 @@ class Stocks:
                                                                 'n_estimators':p['n_estimators'],
                                                                 'eta':p['eta'],
                                                                 'min_child_weight':p['min_child_weight'],
-                                                                'max_depth':p['max_depth'],
-                                                                'colsample_bytree':p['colsample_bytree'],
-                                                                'subsample':p['subsample']
+                                                                'max_depth':p['max_depth']
                                                                 },ignore_index=True)
                 else:
                     continue
@@ -321,9 +309,7 @@ class Stocks:
         model = XGBClassifier(n_estimators=int(parameter['n_estimators']),
                               learning_rate=parameter['eta'],
                               min_child_weight=int(parameter['min_child_weight']),
-                              max_depth=int(parameter['max_depth']),
-                              colsample_bytree=parameter['colsample_bytree'],
-                              subsample=parameter['subsample']
+                              max_depth=int(parameter['max_depth'])
                               )
 
         model.fit(X_train, y_train, early_stopping_rounds=50, eval_metric='logloss', eval_set=evals, verbose=0)
@@ -335,10 +321,10 @@ class Stocks:
         joblib.dump(model, model_file_name)
         joblib.dump(scaler, scaler_file_name)
 
-        return parameter, print(f'{code}_{day}_Modeling Finish!!')
+        return parameter, print(f'{code}_{day}_xgb_Modeling Finish!!')
 
 
-    def modelings(self, data, code, day):
+    def rf_modeling(self, data, code, day):
         
         data = data.iloc[:-day, :]
 
@@ -433,7 +419,7 @@ class Stocks:
         joblib.dump(model, model_file_name)
         joblib.dump(scaler, scaler_file_name)
 
-        return parameter, print(f'{code}_{day}_Modeling Finish!!')
+        return parameter, print(f'{code}_{day}_rf_Modeling Finish!!')
 
     # 예측값 반환, path='모델, 스케일러 경로'
     # 예측값 딕셔너리 형태로 반환
@@ -467,26 +453,17 @@ class Stocks:
         pred = np.argmax(prob, axis=1)
 
         # dictonary생성, (key:날짜 value:예측값)
-        result_dic = {}
+        pred_dic = {}
         for i, j in zip(pred_day, pred):
-            result_dic[i] = j
-        
-        # 시각화를 위한 강도 생성
-        # alpha_lst = []
-        # alpha = 0
-        # for i in range(len(pred)):
-        #     if pred[i] == 1:
-        #         alpha += 1
-        #         alpha_lst.append(alpha)
-        #     else:
-        #         alpha = 0
-        #         alpha_lst.append(alpha)
+            pred_dic[i] = j
 
-        return result_dic
-        # return result_dic, alpha_lst
+        prob_dic = {}
+        for i, j in zip(pred_day, prob):
+            prob_dic[i] = j
 
+        return pred_dic
 
-    def predicts(self, data, code, day, alpha):
+    def predict_acc(self, data, code, day):
         xgb_model = joblib.load(f'./model/xgb_model_{code}_{str(day)}.pkl')
         rf_model = joblib.load(f'./model/rf_model_{code}_{str(day)}.pkl')
         scaler = joblib.load(f'./model/scaler_{code}_{str(day)}.pkl')
@@ -506,7 +483,7 @@ class Stocks:
         xgb_prob = xgb_model.predict_proba(X_test)
         rf_prob = rf_model.predict_proba(X_test)
 
-        prob = (xgb_prob * (1-alpha)) + (rf_prob * alpha)
+        prob = (xgb_prob * 0.8) + (rf_prob * 0.2)
         pred = np.argmax(prob, axis=1)
         
         xgb_acc = accuracy_score(xgb_pred, y_test)
