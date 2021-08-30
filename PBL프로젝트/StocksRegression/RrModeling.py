@@ -13,7 +13,11 @@ for name in tqdm(names_lst):
         data, code = rr.load_stocks_data(f'{name}', stock_code)
 
         for day in days_lst:
+
+            # Stocks 객체 생성
             stocks = rr.Stocks(data)
+
+            # 모델링
             stocks.modeling(code, day)
     except:
         print(f'{name} ERROR!!')

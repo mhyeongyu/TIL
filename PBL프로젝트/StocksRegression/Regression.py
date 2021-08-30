@@ -26,6 +26,7 @@ def load_stocks_data(name, stock_code):
     codes_dic = dict(stock_code.values)
     code = codes_dic[name]
 
+    # 기간설정
     # today = date.today()
     # today = date.today() - timedelta(days=30)
     today = date(2021, 7, 8)
@@ -48,6 +49,7 @@ def load_stocks_data(name, stock_code):
     except:
         print(f'     LOAD ERROR: {name}     ')
 
+# MAPE(평가지표)
 def mean_absolute_percentage_error(y_true, y_pred): 
     y_true, y_pred = np.array(y_true), np.array(y_pred)
     return np.mean(np.abs((y_true - y_pred) / y_true)) * 100
@@ -56,6 +58,7 @@ class Stocks:
 
     alpha_dict = {}
 
+    # 모델 불러오기 경로 생성
     for pkl in os.listdir('./model'):
         if pkl.split('_')[0] == 'prophet':
             k = pkl.split('_')[1] + '_' + pkl.split('_')[2]
@@ -126,7 +129,7 @@ class Stocks:
         else:
             value = forecast[0]
 
-        #Prophet
+        #Prophet 파라미터 튜닝
         idx = 0
             
         for p in tqdm(grid):
@@ -144,7 +147,8 @@ class Stocks:
 
             pred_y = forecast_data.yhat.values[-day:]
             MAPE = mean_absolute_percentage_error(test_data.values, pred_y)
-            
+        
+            # 정확도 증가시 해당 파라미터 저장
             if idx == 0:
                 idx += 1
                 model_parameters = model_parameters.append({'MAPE':MAPE,
@@ -186,6 +190,7 @@ class Stocks:
         mape = 10000
         select_alpha = 0
 
+        # ARIMA + Prophet
         for alpha in [0.2, 0.4, 0.6, 0.8]:
             mean_pred = (value * (1-alpha)) + (pred * alpha)
             ans = mean_absolute_percentage_error(test_data.values, mean_pred)

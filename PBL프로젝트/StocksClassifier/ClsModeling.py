@@ -11,14 +11,21 @@ for name in tqdm(names_lst):
     try:
         print(f'\nStart {name} Modeling!!')
         data, code = cls.load_stocks_data(f'{name}', stock_code)
+
+        # Stocks 객체 생성
         stocks = cls.Stocks(data)
+
+        # 보조지표 생성
         stocks.preprocessing()
         
         for day in days_lst:
-
+            
+            # 보조지표 신호 생성
             sign_data = stocks.stocksign(stocks.data, day)
-            para = stocks.xgb_modeling(sign_data, code, day)
-            parameter = stocks.rf_modeling(sign_data, code, day)
+            
+            # 모델링
+            stocks.xgb_modeling(sign_data, code, day)
+            stocks.rf_modeling(sign_data, code, day)
         
     except:
         print(f'{name} ERROR!!')

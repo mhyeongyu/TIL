@@ -22,6 +22,7 @@ def load_stocks_data(name, stock_code):
     codes_dic = dict(stock_code.values)
     code = codes_dic[name]
 
+    ## 기간설정
     # today = date.today()
     # today = date.today() - timedelta(days=30)
     today = date(2021, 7, 8)
@@ -169,12 +170,13 @@ class Stocks:
         
         target = target_dic[day]
 
+        # 보조지표 예측시점만큼 평활화
         for col in columns:
             data[f'{col}'] = data[f'{col}'].ewm(span=day, adjust=False).mean()
 
         # 매수: 1, 매도: -1, 중립: 0
         # 양수: 1, 음수: 0
-        
+
         data['MACD_sign'] = data['MACD'].apply(lambda x: 1 if x >0 else -1)
         data['MACD_Oscillator_pm'] = data['MACD_Oscillator'].apply(lambda x: 1 if x > 0 else 0)
         data['MACD_Oscillator_sign'] = data['MACD_Oscillator_pm'] - data['MACD_Oscillator_pm'].shift(1)
@@ -240,6 +242,7 @@ class Stocks:
         X_val = scaler.transform(X_val)
         X_test = scaler.transform(X_test)
         
+        # XGBoost 파라미터 튜닝
         params_grid = {'n_estimators' : [1000], 
                        'eta' : [0.01, 0.1, 0.3], 
                        'min_child_weight' : [1, 2, 4, 8], 
@@ -257,6 +260,7 @@ class Stocks:
 
         idx = 0
 
+        # GridSearch
         for p in grid:
             model = XGBClassifier(n_estimators=p['n_estimators'],
                                   learning_rate=p['eta'],
@@ -272,6 +276,8 @@ class Stocks:
             acc = accuracy_score(pred, y_test)
             # print(f'Accuracy: {acc}')
 
+
+            # 정확도 증가시 해당 파라미터 저장
             if idx == 0:
                 idx += 1
                 model_parameters = model_parameters.append({'ACC':acc,
@@ -292,10 +298,11 @@ class Stocks:
                 else:
                     continue
         
-                    
+        
         parameter = model_parameters.iloc[-1, :]
 
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.05, shuffle=False)
+        # 최근 데이터까지 학습을 위해 Train_Test 재실시
+        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.3, shuffle=False)
         
         # 스케일링 적용하여 모든 변수 수치 정규화
         scaler = StandardScaler()
@@ -321,7 +328,7 @@ class Stocks:
         joblib.dump(model, model_file_name)
         joblib.dump(scaler, scaler_file_name)
 
-        return parameter, print(f'{code}_{day}_xgb_Modeling Finish!!')
+        return print(f'{code}_{day}_xgb_Modeling Finish!!')
 
 
     def rf_modeling(self, data, code, day):
@@ -344,7 +351,7 @@ class Stocks:
         X_val = scaler.transform(X_val)
         X_test = scaler.transform(X_test)
 
-        #RandomForest
+        #RandomForest 파라미터 튜닝
         params_grid = {'n_estimators': [100, 300, 500],
                         'max_depth': [5, 15, 25],
                         'min_samples_split': [2, 5, 10],
@@ -395,22 +402,20 @@ class Stocks:
                     continue
 
         parameter = model_parameters.iloc[-1, :]
-    
-        X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.05, shuffle=False)
         
         # 스케일링 적용하여 모든 변수 수치 정규화
         scaler = StandardScaler()
-        scaler.fit(X_train)
+        scaler.fit(X))
 
-        X_train = scaler.transform(X_train)
+        scaled_X = scaler.transform(X)
 
-        model = RandomForestClassifier(n_estimators=int(p['n_estimators']),
-                                       max_depth=p['max_depth'],
-                                       min_samples_split=p['min_samples_split'],
-                                       min_samples_leaf=p['min_samples_leaf']
+        model = RandomForestClassifier(n_estimators=int(parameter['n_estimators']),
+                                       max_depth=parameter['max_depth'],
+                                       min_samples_split=parameter['min_samples_split'],
+                                       min_samples_leaf=parameter['min_samples_leaf']
                                        )
 
-        model.fit(X_train, y_train)
+        model.fit(scaled_X, y)
 
         # 지정경로에 생성한 모델과 스케일러 저장
         model_file_name = f'./model/rf_model_{code}_{str(day)}.pkl' 
@@ -419,7 +424,7 @@ class Stocks:
         joblib.dump(model, model_file_name)
         joblib.dump(scaler, scaler_file_name)
 
-        return parameter, print(f'{code}_{day}_rf_Modeling Finish!!')
+        return print(f'{code}_{day}_rf_Modeling Finish!!')
 
     # 예측값 반환, path='모델, 스케일러 경로'
     # 예측값 딕셔너리 형태로 반환
@@ -437,6 +442,7 @@ class Stocks:
         test = scaler.transform(test_data)
         stock_data = test_data.reset_index()
         
+        # 예측시점 주단위 변환
         week = day//5
 
         first_day = stock_data.iloc[-1, 0] + timedelta(days=1)
@@ -449,6 +455,7 @@ class Stocks:
         xgb_prob = xgb_model.predict_proba(test)
         rf_prob = rf_model.predict_proba(test)
 
+        # XGBoost 80% + RandomForest 20%
         prob = (xgb_prob * 0.8) + (rf_prob * 0.2)
         pred = np.argmax(prob, axis=1)
 
@@ -463,6 +470,7 @@ class Stocks:
 
         return pred_dic
 
+    # 정확도 출력
     def predict_acc(self, data, code, day):
         xgb_model = joblib.load(f'./model/xgb_model_{code}_{str(day)}.pkl')
         rf_model = joblib.load(f'./model/rf_model_{code}_{str(day)}.pkl')
